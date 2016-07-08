@@ -26,6 +26,8 @@ public:
         currentFrequency(440.0),
         targetFrequency(currentFrequency),
         numSines(10),
+        envParam(5),
+        freqDelta(0.0),
         aCoefficients(numSines, 0.0),
         fourierFreqs(numSines, 0.0)
     {
@@ -59,7 +61,6 @@ public:
 
         // For more details, see the help for AudioProcessor::prepareToPlay()
         currentSampleRate = sampleRate;
-        updateAngleDelta();
     }
 
     void getNextAudioBlock (const AudioSourceChannelInfo& bufferToFill) override
@@ -93,15 +94,14 @@ public:
         ((x * x * x * x * x * x * x) / 5040);
     }
 
-    double envelope (double a, double b, double x)
+    double envelope (double b, double x)
     {
-        return a*std::exp(-b*x);
+        return std::exp(-b*x);
     }
 
-    double sinePoly (double A, double B, double freq)
+    double sinePoly (double A, double freq)
     {
-
-        return A*B*poly(freq);
+        return A*poly(freq);
     }
 
     void resized() override
@@ -116,15 +116,29 @@ public:
         {
             if (currentSampleRate > 0.0)
             {
-                calcWave();
+                updateFreq();
             }
         }
     }
 
-    void calcWave()
+    void updateFreq()
     {
-        const double cyclesPerSample = frequencySlider.getValue() / currentSampleRate; // [2]
-        dx = cyclesPerSample * 2.0 * double_Pi;                                // [3]
+        const double cyclesPerSample = frequencySlider.getValue() / currentSampleRate; 
+        freqDelta = cyclesPerSample * 2.0 * double_Pi;
+        fourierFreqs[0] = 2.0 * double_Pi * frequencySlider.getValue();
+        for (int j = 1; j < numSines; j++)
+        {
+            fourierFreqs[j] = fourierFreqs[j-1] + freqDelta;
+        }
+    }
+
+    void constructWave()
+    {
+        double wave = 0.0;
+        for(int i = 0; i < numSines; i++)
+        {
+            wave += envelope(envParam, fourierFreqs[i])*sinePoly(aCoefficients[i], fourierFreqs[i]);
+        }
     }
 
 
@@ -136,6 +150,8 @@ private:
     double currentSampleRate;
     double currentFrequency, targetFrequency;
     double numSines;
+    double envParam;
+    double freqDelta;
     std::vector<double> currentAngles = {0.0, 0.0};
     std::vector<double> aCoefficients;
     std::vector<double> fourierFreqs;
